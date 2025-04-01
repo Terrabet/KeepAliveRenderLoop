@@ -18,6 +18,6 @@
 2. Check your system tray
 3. Right-click the tray icon to configure
 
-## Screenshots
+## Demo - Click Play
 
-![KeepAliveRenderLoop](screenshots/karl.gif)
+![KeepAliveRenderLoop](karl.gif)
