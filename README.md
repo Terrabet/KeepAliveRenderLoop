@@ -1,8 +1,16 @@
-# Keep-Alive Render Loop
+# Keep-Alive Render Loop (Beta)
 
-## (Still in Testing)
-- My 7900XT driver kept failing and system freezing. So I decided to try and remedy this by giving it some utilisation when idle.
-- Is your AMD GPU crashing on minimal usage desktop applications?
+Fixes AMD GPU Crashes During Low Usage
+Problem: Some AMD GPUs (like the 7900XT/XTX) crash or freeze during light tasks (web browsing, idle) due to low power states.
+So far I've ran the application on low and not experienced a crash even when leaving the PC idle
+
+Solution: This app keeps your GPU slightly active by rendering a hidden black canvas, preventing crashes.
+
+Here are some posts from the AMD forum with users experiencing thse problems. (Based on AMD forum reports)
+- https://community.amd.com/t5/pc-drivers-software/7900xt-driver-timeout-results-in-pc-freeze
+- https://community.amd.com/t5/pc-drivers-software/7900xt-driver-low-idle-voltage-may-cause-instability
+- https://community.amd.com/t5/pc-drivers-software/all-amd-pc-randomly-freezes-in-light-tasks-like-watching-youtube
+- https://community.amd.com/t5/general-discussions/pc-unresponsive-and-freezes-up-randomly
 
 ## Features
 
