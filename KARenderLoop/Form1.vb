@@ -4,8 +4,14 @@ Imports SharpDX.Direct3D11
 Imports SharpDX.DXGI
 Imports SharpDX.Mathematics.Interop
 Imports System.Threading
+Imports Microsoft.Win32
+Imports System.IO
 
 Public Class KARenderLoop
+
+    ' Start Settings
+    Private Const SETTINGS_FILE As String = "KARL_settings.cfg"
+    Private startWithWindows As Boolean = False
 
     ' GPU Load Control
     Private device As SharpDX.Direct3D11.Device
@@ -24,6 +30,8 @@ Public Class KARenderLoop
     End Class
 
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        ' Load from config
+        LoadSettings()
         ' Hide the main form (runs in background)
         Me.WindowState = FormWindowState.Minimized
         Me.ShowInTaskbar = False
@@ -44,11 +52,95 @@ Public Class KARenderLoop
         highTool.Tag = 3
         Dim exitTool = New ToolStripMenuItem("Exit", Nothing, AddressOf ExitApp)
 
+        ' +Startup menu
+        Dim startupTool = New ToolStripMenuItem("Start with Windows", Nothing, AddressOf ToggleStartup)
+        startupTool.Checked = startWithWindows
+        contextMenu.Items.Insert(0, startupTool)
+        contextMenu.Items.Insert(1, New ToolStripSeparator())
+
+        ' Load last mode
+        SetLoadLevel(Nothing, New EventArgs())
+
         contextMenu.Items.AddRange({offTool, lowTool, mediumTool, highTool, New ToolStripSeparator(), exitTool})
         notifyIcon.ContextMenuStrip = contextMenu
 
         ' Start with Low load by default
         SetLoadLevel(Nothing, New EventArgs())
+    End Sub
+
+    Private Function IsUserAdministrator() As Boolean
+        Try
+            Dim principal = New Security.Principal.WindowsPrincipal(
+            Security.Principal.WindowsIdentity.GetCurrent())
+            Return principal.IsInRole(Security.Principal.WindowsBuiltInRole.Administrator)
+        Catch
+            Return False
+        End Try
+    End Function
+
+    Private Sub ToggleStartup(sender As Object, e As EventArgs)
+        If Not IsUserAdministrator() Then
+            MsgBox("To use the option 'run on startup', you need to run this application with administrator rights", MsgBoxStyle.Information, "Administrator")
+            MsgBox(Security.Principal.WindowsIdentity.GetCurrent().Name)
+            Return
+        End If
+        startWithWindows = Not startWithWindows
+        DirectCast(sender, ToolStripMenuItem).Checked = startWithWindows
+        SaveSettings()
+
+        If startWithWindows Then
+            ' Create task for current user (no admin needed?)
+            CreateScheduledTask()
+        Else
+            ' Remove task
+            DeleteScheduledTask()
+        End If
+    End Sub
+
+    '$" /SC ONLOGON /RU ""'{Security.Principal.WindowsIdentity.GetCurrent().Name}' /RL HIGHEST /F", 'possibly needed in the future for identity admin
+    Private Sub CreateScheduledTask()
+        Try
+            Dim startInfo As New ProcessStartInfo() With {
+                .FileName = "schtasks",
+                .Arguments = $"/CREATE /TN ""KARL"" /TR ""'{Application.ExecutablePath}' /minimized"" " &
+                             $"/SC ONLOGON /RU ""{Environment.UserDomainName}\{Environment.UserName}"" " &
+                             $" /RL HIGHEST /F",
+                .WindowStyle = ProcessWindowStyle.Normal,
+            .Verb = "runas" ' Run as admin
+            }
+            Process.Start(startInfo)?.WaitForExit()
+        Catch ex As Exception
+            ' Fallback to current user startup
+            Dim userKey = Registry.CurrentUser.OpenSubKey(
+                "SOFTWARE\Microsoft\Windows\CurrentVersion\Run", True)
+            userKey?.SetValue("KARL", Application.ExecutablePath)
+        End Try
+    End Sub
+
+    Private Sub DeleteScheduledTask()
+        Try
+            Process.Start("schtasks", "/DELETE /TN ""KARL"" /F")?.WaitForExit()
+        Catch
+            ' Cleanup registry fallback
+            Registry.CurrentUser.OpenSubKey(
+                "SOFTWARE\Microsoft\Windows\CurrentVersion\Run", True)?.DeleteValue("KARL", False)
+        End Try
+    End Sub
+
+    Private Sub LoadSettings()
+        Try
+            If File.Exists(SETTINGS_FILE) Then
+                Dim lines = File.ReadAllLines(SETTINGS_FILE)
+                loadLevel = CInt(lines(0))
+                startWithWindows = CBool(lines(1))
+            End If
+        Catch
+            loadLevel = 1 ' Default to Low
+        End Try
+    End Sub
+
+    Private Sub SaveSettings()
+        File.WriteAllText(SETTINGS_FILE, $"{loadLevel}{Environment.NewLine}{startWithWindows}")
     End Sub
 
     Private Sub SetLoadLevel(sender As Object, e As EventArgs)
@@ -69,8 +161,9 @@ Public Class KARenderLoop
         ElseIf loadLevel = 0 AndAlso isRunning Then
             StopRenderLoop()
         End If
-
         notifyIcon.Text = "GPU K-ARL - " & GetLoadLevelName(loadLevel)
+
+        SaveSettings()
     End Sub
 
     Private Function GetLoadLevelName(level As Integer) As String
@@ -183,6 +276,7 @@ Public Class KARenderLoop
     End Sub
 
     Private Sub ExitApp(sender As Object, e As EventArgs)
+        SaveSettings()
         StopRenderLoop()
         notifyIcon.Visible = False
         Application.Exit()
